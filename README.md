@@ -1,3 +1,3 @@
 connect4
 ========
-Connect4 source code c.
+Connect4 source code.
