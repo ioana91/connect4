@@ -1,12 +1,154 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <util/delay.h>
 #include <time.h>
 
-#define n 5
-#define m 7
+#define MAX_COLUMNS 7
+#define MAX_LINES 5
+#define PLAYER_ONE 1
+#define PLAYER_TWO 2
+#define FLICKER 10
 
-int verifyEndOfGame(int** matrix){
-  int i, j;
+int matrix[MAX_LINES][MAX_COLUMNS];
+int redLines[5] = {PA0, PA1, PC5, PC6, PB0};
+int greenLines[5] = {PC0, PA2, PA3, PA6, PC7};
+int columns[7] = {PC2, PC3, PC1, PC4, PA7, PA4, PA5};
+int buttons[4] = {PD0, PD1, PD4, PD5};
+
+int turn = 0;
+int pressButton = 0;
+int endOfGame = 1;
+int gameMode = 1;
+
+void enableColumn(int column){
+	switch (column){
+		case 0:
+			PORTC |= (1 << columns[0]);
+			break;
+		case 1:
+			PORTC |= (1 << columns[1]);
+			break;
+		case 2:
+			PORTC |= (1 << columns[2]);
+			break;
+		case 3:
+			PORTC |= (1 << columns[3]);
+			break;
+		case 4:
+			PORTA |= (1 << columns[4]);
+			break;
+		case 5:
+			PORTA |= (1 << columns[5]);
+			break;
+		default:
+			PORTA |= (1 << columns[6]);
+			break;
+	} 
+}
+
+void enableRedRow(int row){
+	switch (row){
+		case 0:
+			PORTA |= (1 << redLines[0]);
+			break;
+		case 1:
+			PORTA |= (1 << redLines[1]);
+			break;
+		case 2:
+			PORTC |= (1 << redLines[2]);
+			break;
+		case 3:
+			PORTC |= (1 << redLines[3]);
+			break;
+		default:
+			PORTB |= (1 << redLines[4]);
+			break;
+	}
+}
+
+void disableRedRow(int row){
+	switch (row){
+		case 0:
+			PORTA &= ~(1 << redLines[0]);
+			break;
+		case 1:
+			PORTA &= ~(1 << redLines[1]);
+			break;
+		case 2:
+			PORTC &= ~(1 << redLines[2]);
+			break;
+		case 3:
+			PORTC &= ~(1 << redLines[3]);
+			break;
+		default:
+			PORTB &= ~(1 << redLines[4]);
+			break;
+	}
+}
+
+void enableGreenRow(int row){
+	switch (row){
+		case 0:
+			PORTC |= (1 << greenLines[0]);
+			break;
+		case 1:
+			PORTA |= (1 << greenLines[1]);
+			break;
+		case 2:
+			PORTA |= (1 << greenLines[2]);
+			break;
+		case 3:
+			PORTA |= (1 << greenLines[3]);
+			break;
+		default:
+			PORTC |= (1 << greenLines[4]);
+			break;
+	}
+}
+
+void disableGreenRow(int row){
+	switch (row){
+		case 0:
+			PORTC &= ~(1 << greenLines[0]);
+			break;
+		case 1:
+			PORTA &= ~(1 << greenLines[1]);
+			break;
+		case 2:
+			PORTA &= ~(1 << greenLines[2]);
+			break;
+		case 3:
+			PORTA &= ~(1 << greenLines[3]);
+			break;
+		default:
+			PORTC &= ~(1 << greenLines[4]);
+			break;
+	}
+}
+
+void lightGreen(int row, int column){
+	enableColumn(column);
+	enableGreenRow(row);
+}
+
+void unlightGreen(int row, int column){
+	disableColumn(column);
+	disableGreenRow(row);
+}
+
+void lightRed(int row, int column){
+	enableColumn(column);
+	enableRedRow(row);
+}
+
+void unlightRed(int row, int column){
+	disableColumn(column);
+	disableRedRow(row);
+}
+
+int verifyEndOfGame(){
+	int i, j;
 
 	for (i = 0; i < n; i++)
 			for (j = 0; j < m; j++)
@@ -17,7 +159,7 @@ int verifyEndOfGame(int** matrix){
 	return 1;
 }
 
-int checkHorizontal(int** matrix){
+int checkHorizontal()
 	int i, j;
 
 	for (i = n - 1; i >= 0; i--)
@@ -34,7 +176,7 @@ int checkHorizontal(int** matrix){
 	return 0;
 }
 
-int HorizontalMove(int** matrix, int player){
+int HorizontalMove(int player){
 	//when player is 1, lose is checked; otherwise, win is checked
 	int i, j;
 
@@ -61,7 +203,7 @@ int HorizontalMove(int** matrix, int player){
 	return -1;
 }
 
-int checkVertical(int** matrix){
+int checkVertical(){
 	int i, j;
 
 	for (j = 0; j < m; j++)
@@ -78,7 +220,7 @@ int checkVertical(int** matrix){
 	return 0;
 }
 
-int VerticalMove(int** matrix, int player){
+int VerticalMove(int player){
 	int i, j;
 	
 	for (j = 0; j < m; j++){
@@ -91,7 +233,7 @@ int VerticalMove(int** matrix, int player){
 	return -1;
 }
 
-int checkLeftDiagonal(int** matrix){
+int checkLeftDiagonal(){
 	int i, j;
 
 	for (i = 0; i < n - 3; i++)
@@ -108,7 +250,7 @@ int checkLeftDiagonal(int** matrix){
 	return 0;
 }
 
-int LeftDiagonalMove(int** matrix, int player){
+int LeftDiagonalMove(int player){
 	int i, j;
 
 	for (i = 0; i < n - 3; i++)
@@ -134,7 +276,7 @@ int LeftDiagonalMove(int** matrix, int player){
 	return -1;
 }
 
-int checkRightDiagonal(int** matrix){
+int checkRightDiagonal(){
 	int i, j;
 
 	for (i = 0; i < n - 3; i++)
@@ -151,7 +293,7 @@ int checkRightDiagonal(int** matrix){
 	return 0;
 }
 
-int RightDiagonalMove(int** matrix, int player){
+int RightDiagonalMove(int player){
 	int i, j;
 
 	for (i = 0; i < n - 3; i++)
@@ -177,31 +319,31 @@ int RightDiagonalMove(int** matrix, int player){
 	return -1;
 }
 
-int verifyWhoWins(int** matrix){
+int verifyWhoWins(){
 	int whoWins;
 
-	whoWins = checkHorizontal(matrix);
+	whoWins = checkHorizontal();
 	if (whoWins == 1)
 		return 1;
 
 	if (whoWins == 2)
 		return 2;
 
-	whoWins = checkVertical(matrix);
+	whoWins = checkVertical();
 	if (whoWins == 1)
 		return 1;
 
 	if (whoWins == 2)
 		return 2;
 
-	whoWins = checkLeftDiagonal(matrix);
+	whoWins = checkLeftDiagonal();
 	if (whoWins == 1)
 		return 1;
 
 	if (whoWins == 2)
 		return 2;
 
-	whoWins = checkRightDiagonal(matrix);
+	whoWins = checkRightDiagonal();
 	if (whoWins == 1)
 		return 1;
 
@@ -211,22 +353,22 @@ int verifyWhoWins(int** matrix){
 	return 0;
 }
 
-int selectMove(int** matrix, int player){
+int selectMove(int player){
 	int selected, available;
 
-	selected = HorizontalMove(matrix, player);
+	selected = HorizontalMove(player);
 	if (selected != -1)
 		return selected;
 
-	selected = VerticalMove(matrix, player);
+	selected = VerticalMove(player);
 	if (selected != -1)
 		return selected;
 
-	selected = LeftDiagonalMove(matrix, player);
+	selected = LeftDiagonalMove(player);
 	if (selected != -1)
 		return selected;
 
-	selected = RightDiagonalMove(matrix, player);
+	selected = RightDiagonalMove(player);
 	if (selected != -1)
 		return selected;
 
@@ -234,62 +376,101 @@ int selectMove(int** matrix, int player){
 }
 
 int main(){
-	int** matrix;
-	int i, j, selected, turn, endOfGame, whoWins, checkLose, available, gameMode;
-
+	int i, j, left, right, whoWins, selected, available, times;
+	
 	srand(time(NULL));
-
-	turn = 0;
-	endOfGame = 1;
-
-	printf("Select game mode:\n");
-	printf("\t1. Player vs player\n");
-	printf("\t2. Player vs dummy computer\n");
-	printf("\t3. Player vs smart computer\n");
-	scanf("%d", &gameMode);
-
-	matrix = calloc(n, sizeof(int*));
-	for (i = 0; i < n; i++)
-		matrix[i] = calloc(m, sizeof(int));
-
+	
+	DDRA = 0xFF;
+	DDRB |= (1 << PB0);
+	DDRC = 0xFF;
+	
+	DDRD &= ~(1 << buttons[0]);
+	DDRD &= ~(1 << buttons[1]);
+	DDRD &= ~(1 << buttons[2]);
+	DDRD &= ~(1 << buttons[3]);
+	
+	for (i = 0; i < MAX_LINES; i++)
+		for (j = 0; j < MAX_COLUMNS; j++)
+			matrix[i][j] = 0;
+	
+	while (!(PIND & (1 << PD4))){
+		if ((PIND & (1 << PD5)) == 0)
+			gameMode = (gameMode + 1) % 3;
+	}
+	
 	while (1){
-		whoWins = verifyWhoWins(matrix);
-		if (whoWins == 1){
-			printf("Red wins!\n");
-			break;
-		}
-		if (whoWins == 2){
-			printf("Green wins!\n");
-			break;
-		}
-
-		endOfGame = verifyEndOfGame(matrix);
-
-		if (endOfGame == 1){
-			printf("It's a tie!\n");
-			break;
-		}
-
+		left = 0;
+		right = 0;
+		
+		whoWins = verifyWhoWins();
+		//something to do with leds
+		
+		endOfGame = verifyEndOfGame();
+		//something to do with both colors if it'a a tie
+		
 		if (turn % 2 == 0){
-			printf("Introduceti un numar de la 0 la 6: ");
-			scanf("%d", &selected);
+			while (!(PIND & (1 << PD4))){
+				//PD0 dreapta; PD1 stanga; PD4 selectie; PD5 mod joc
+				if ((PIND & (1 << PD0)) == 0)
+					right++;
+				if ((PIND & (1 << PD1)) == 0)
+					left++;
+					
+				selected = 0 + right - left;
+					
+				for (i = MAX_LINES - 1; i >= 0; i--)
+					if (matrix[i][selected] == 0){
+						matrix[i][selected] = PLAYER_TWO;
+						break;
+					}
+					
+				for (times = 0; times < FLICKERS; times++){
+						lightRed(i, selected);
+						unlightRed(i, selected);
+					}	
 
-			for (i = n - 1; i >= 0; i--)
+			}
+			
+			selected = 0 + right - left;
+			
+			for (i = MAX_LINES - 1; i >= 0; i--)
 				if (matrix[i][selected] == 0){
-					matrix[i][selected] = 1;
+					matrix[i][selected] = PLAYER_ONE;
 					break;
 				}
+			
+			lightRed(i, selected);
 		}
 		else{
 			if (gameMode == 1){
-				printf("Introduceti un numar de la 0 la 6: ");
-				scanf("%d", &selected);
-
-				for (i = n - 1; i >= 0; i--)
+				while (!(PIND & (1 << PD4))){
+					//PD0 dreapta; PD1 stanga; PD4 selectie; PD5 mod joc
+					if ((PIND & (1 << PD0)) == 0)
+						right++;
+					if ((PIND & (1 << PD1)) == 0)
+						left++;
+						
+					selected = 0 + right - left;
+					
+					for (i = MAX_LINES - 1; i >= 0; i--)
 					if (matrix[i][selected] == 0){
-						matrix[i][selected] = 2;
+						matrix[i][selected] = PLAYER_TWO;
 						break;
 					}
+					
+					for (times = 0; times < FLICKERS; times++){
+						lightGreen(i, selected);
+						unlightGreen(i, selected);
+					}	
+				}	
+			
+				for (i = MAX_LINES - 1; i >= 0; i--)
+					if (matrix[i][selected] == 0){
+						matrix[i][selected] = PLAYER_TWO;
+						break;
+					}
+					
+				lightGreen(i, selected);
 			}
 			else if (gameMode == 2){
 				do{
@@ -300,19 +481,21 @@ int main(){
 						available = 0;
 				}while (available == 1);
 
-				for (i = n - 1; i >= 0; i--)
+				for (i = MAX_LINES - 1; i >= 0; i--)
 					if (matrix[i][selected] == 0){
-						matrix[i][selected] = 2;
+						matrix[i][selected] = PLAYER_TWO;
 						break;
 					}
+				
+				lightGreen(i, selected);
 			}
 			else if (gameMode == 3){
 				if (turn == 1)
-					selected = rand() % m;
+					selected = rand() % MAX_COLUMNS;
 				else{
-					selected = selectMove(matrix, 2);
+					selected = selectMove(PLAYER_TWO);
 					if (selected == -1){
-						selected = selectMove(matrix, 1);
+						selected = selectMove(PLAYER_ONE);
 						if (selected == -1)
 							do{
 								selected = rand() % 7;
@@ -322,30 +505,19 @@ int main(){
 									available = 0;
 							}while (available == 1);
 					}
-				}
-				
-				for (i = n - 1; i >= 0; i--)
+					
+					for (i = n - 1; i >= 0; i--)
 					if (matrix[i][selected] == 0){
-						matrix[i][selected] = 2;
+						matrix[i][selected] = PLAYER_TWO;
 						break;
 					}
+					
+					lightGreen(i, selected);
+				}
 			}
 		}
-
-		for (i = 0; i < n; i++){
-			for (j = 0; j < m; j++)
-				printf("%d ", matrix[i][j]);
-			printf("\n");
-		}
-		printf("\n");
-
+		
 		turn++;
 		endOfGame = 1;
 	}
-
-	for (i = 0; i < n; i++)
-		free(matrix[i]);
-	free(matrix);
-
-	return 0;
 }
